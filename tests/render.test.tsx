@@ -263,3 +263,50 @@ test("a nested subagent's calls go to the turn that launched its parent", async 
   expect(await view.find({ text: /Replied to: what time is it/ })).toBeDefined()
   await view.unmount()
 })
+
+test("the Agent call's description labels its subagent when the spawn settles while the subagent's turn starts", async ($, on) => {
+  const clock = mock.clock(on, { now: 1_000 })
+  on('turn.start', ($, e) => ({ turnId: e.turnId }))
+  on('turn.complete', () => ({ text: '' }))
+  on('model.complete', () => ({ value: { isAnswered: false, reason: 'api-error' } }) as never)
+  on('tool.call', () => ({ result: 'ok' }))
+  // As Claude Code raises them: the subagent's turn starts while its spawn is still settling, and the
+  // whole agent.spawn hook runs between turn.start's read of the agents atom and what turn.start does next.
+  let readAgents = () => {}
+  let spawned = () => {}
+  const hasRead = new Promise<void>(r => (readAgents = r))
+  const done = new Promise<void>(r => (spawned = r))
+  let isFirstRead = true
+  on('agent.spawn', async () => {
+    await hasRead
+    return { model: 'm', agentId: 'a1' }
+  })
+  on('state.get', async (_, e, next) => {
+    const r = await next(e)
+    if (e.key === 'agents' && isFirstRead) {
+      isFirstRead = false
+      readAgents()
+      await done
+    }
+    return r
+  })
+
+  await $.turn.start({ text: 'sleep in the background', turnId: 't1' })
+  await $.tool.call({ tool: 'Agent', description: 'Sleep probe' } as never)
+  const spawn = $.agent.spawn({ prompt: 'sleep', description: 'Sleep probe', background: true } as never)
+  const sub = $.turn.start({ text: 'sleep', turnId: 'a1-t', agentId: 'a1' } as never)
+  await spawn
+  spawned()
+  await sub
+  await $.turn.complete({ answer: 'started', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' })
+  await clock.advance(3_000)
+
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const b = await $.ui.mount({ plugin: 'visual-recap', surface, component: 'AbovePrompt', props: band })
+    expect(await b.find({ text: /Agent Sleep probe · 3s/ })).toBeDefined()
+    await b.unmount()
+    const p = await $.ui.mount({ plugin: 'visual-recap', surface, component: 'Pane', requestId: 'visual-recap', props: pane })
+    expect(await p.find({ text: /▶ Agent Sleep probe · 3s/ })).toBeDefined()
+    await p.unmount()
+  }
+})

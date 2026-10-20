@@ -174,11 +174,13 @@ export const register: Register = (on, options) => {
       await update($, turns, l => [...l, turn].slice(-300))
     } else {
       // A background Agent call returns at once, so its span covers none of the subagent's work: time the subagent's own run.
-      // agent.spawn usually names it first; if this start comes first, agent.spawn fills in the label and turn.
+      // Claude Code runs this and agent.spawn side by side, so the span goes in before the label is looked up:
+      // a spawn that wrote the label before this read is found here, a later one patches the span itself.
       const agentId = e.agentId
-      const a = (await read($, agents))[agentId]
-      const span: Span = { id: `${agentId}:${t}`, cat: 'agents', label: a?.label ?? 'Subagent', start: t, agentId, turnId: a?.turnId }
+      const span: Span = { id: `${agentId}:${t}`, cat: 'agents', label: 'Subagent', start: t, agentId }
       await update($, spans, l => [...l, span].slice(-MAX_SPANS))
+      const a = (await read($, agents))[agentId]
+      if (a) await update($, spans, l => l.map(s => (s.id === span.id ? { ...s, label: a.label, turnId: a.turnId } : s)))
     }
     await update($, now, () => t)
     startTicker($)
