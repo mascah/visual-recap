@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Cat, Mark, Span, Turn } from '../types'
+import type { Agent, Cat, Mark, Span, Turn } from '../types'
 import { CATS, catOf, fallbackSummary, fmt, labelOf, runs, strip, summaryPrompt, sweep, totals } from './recap'
 
 const PANE = 'visual-recap'
@@ -16,6 +16,8 @@ const startedAt = atom({ plugin: 'visual-recap', key: 'startedAt' } as const, 0)
 // Animation step while a turn runs; only the band reads it, so the panel redraws once a second, not four times.
 const marks = atom({ plugin: 'visual-recap', key: 'marks' } as const, [] as Mark[])
 const frame = atom({ plugin: 'visual-recap', key: 'frame' } as const, 0)
+// Each subagent's label and the main turn that spawned it, from agent.spawn; each of its runs looks it up at turn.start.
+const agents = atom({ plugin: 'visual-recap', key: 'agents' } as const, {} as Record<string, Agent>)
 
 const SPIN = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
 const PULSE = ['▂', '▄', '▆', '█', '▆', '▄']
@@ -29,11 +31,13 @@ async function snapshot($: $) {
   const pieces = sweep(sp, tu, from, to)
   const tot = totals(pieces)
   const live = tu.find(t => t.end === undefined)
-  const running = sp.filter(s => s.end === undefined).at(-1)
+  // The main loop first: a background subagent shows only while the main loop is idle.
+  const open = sp.filter(s => s.end === undefined)
+  const running = open.findLast(s => s.agentId === undefined) ?? (live ? undefined : open.at(-1))
   let liveText: string | undefined
   if (running) liveText = `${running.label} · ${fmt(to - running.start)}`
   else if (live) {
-    const since = Math.max(live.start, ...sp.filter(s => s.start >= live.start).map(s => s.end ?? 0))
+    const since = Math.max(live.start, ...sp.filter(s => s.agentId === undefined && s.start >= live.start).map(s => s.end ?? 0))
     liveText = `Thinking · ${fmt(to - since)}`
   }
   return { sp, tu, to, st: from, pieces, tot, live, running, liveText }
@@ -66,10 +70,14 @@ function stopTicker() {
   ticker = undefined
 }
 
-// Background subagents outlive the turn that spawned them; keep animating until they finish too.
-async function stopTickerIfIdle($: $) {
+// Background subagents outlive the turn that spawned them, so a subagent's open run counts too.
+async function isBusy($: $) {
   const [tu, sp] = await Promise.all([read($, turns), read($, spans)])
-  if (!tu.some(t => t.end === undefined) && !sp.some(s => s.end === undefined)) stopTicker()
+  return tu.some(t => t.end === undefined) || sp.some(s => s.end === undefined)
+}
+
+async function stopTickerIfIdle($: $) {
+  if (!(await isBusy($))) stopTicker()
 }
 
 async function addMark($: $, kind: Mark['kind'], isAuto?: boolean) {
@@ -147,8 +155,7 @@ export const register: Register = (on, options) => {
       if (!(await restore($).catch(() => false))) await update($, startedAt, () => t)
       await update($, now, () => t)
     }
-    const [tu, sp] = await Promise.all([read($, turns), read($, spans)])
-    if (tu.some(t => t.end === undefined) || sp.some(s => s.end === undefined)) startTicker($)
+    if (await isBusy($)) startTicker($)
     if (options.openPanel === true) void openPane($)
 
     return next(e)
@@ -167,17 +174,37 @@ export const register: Register = (on, options) => {
       await update($, turns, l => [...l, turn].slice(-300))
     } else {
       // A background Agent call returns at once, so its span covers none of the subagent's work: time the subagent's own run.
+      // agent.spawn usually names it first; if this start comes first, agent.spawn fills in the label and turn.
       const agentId = e.agentId
-      const [tu, sp] = await Promise.all([read($, turns), read($, spans)])
-      const turnId = (tu.findLast(x => x.end === undefined) ?? tu.at(-1))?.id
-      const call = sp.findLast(x => x.end === undefined && x.cat === 'agents' && x.agentId === undefined)
-      const span: Span = { id: `${agentId}:${t}`, cat: 'agents', label: call?.label ?? 'Subagent', start: t, agentId, turnId }
+      const a = (await read($, agents))[agentId]
+      const span: Span = { id: `${agentId}:${t}`, cat: 'agents', label: a?.label ?? 'Subagent', start: t, agentId, turnId: a?.turnId }
       await update($, spans, l => [...l, span].slice(-MAX_SPANS))
     }
     await update($, now, () => t)
     startTicker($)
 
     return next(e)
+  })
+
+  // The Agent call's own description labels the subagent, matched by the id its events carry.
+  // A nested subagent belongs to the main turn its parent belongs to.
+  on('agent.spawn', async ($, e, next) => {
+    const result = await next(e)
+    const agentId = result.agentId
+    if (agentId === undefined) return result
+    const turnId =
+      e.parentAgentId === undefined
+        ? (await read($, turns)).findLast(t => t.end === undefined)?.id
+        : (await read($, agents))[e.parentAgentId]?.turnId
+    const label = labelOf({ tool: 'Agent', description: e.description })
+    // ponytail: the last 200 subagents are remembered; an older one's later runs show as "Subagent"
+    await update($, agents, m => {
+      const rest = Object.entries(m).filter(([k]) => k !== agentId)
+      return Object.fromEntries([...rest, [agentId, { label, turnId }] as const].slice(-200))
+    })
+    await update($, spans, l => l.map(s => (s.agentId === agentId && s.end === undefined ? { ...s, label, turnId } : s)))
+
+    return result
   })
 
   // tool.call fires once the model has written the call's arguments, which can take far longer
@@ -211,7 +238,7 @@ export const register: Register = (on, options) => {
     const label = labelOf(e as unknown as Record<string, unknown>)
     const action = e.agentId === undefined ? label : `↳ ${label}`
     // A subagent's calls belong to the turn that spawned it, which may have ended since.
-    const turnId = e.agentId === undefined ? undefined : (await read($, spans)).findLast(s => s.agentId === e.agentId)?.turnId
+    const turnId = e.agentId === undefined ? undefined : (await read($, agents))[e.agentId]?.turnId
     await update($, turns, l => {
       const i = turnId === undefined ? l.findLastIndex(t => t.end === undefined) : l.findLastIndex(t => t.id === turnId)
       if (i < 0 || l[i]!.actions.length >= MAX_ACTIONS) return l
@@ -278,6 +305,7 @@ export const register: Register = (on, options) => {
       await update($, spans, () => [])
       await update($, turns, () => [])
       await update($, marks, () => [])
+      await update($, agents, () => ({}))
       await update($, startedAt, () => 0)
     }
 
@@ -340,7 +368,8 @@ export const register: Register = (on, options) => {
     const turnBar = (t: Turn) => {
       const lo = t.start
       const hi = t.end ?? s.to
-      const mine = s.sp.filter(x => x.start < hi && (x.end ?? s.to) > lo)
+      // A subagent's run belongs to the turn that spawned it, not to whichever turn it overlaps.
+      const mine = s.sp.filter(x => x.start < hi && (x.end ?? s.to) > lo && (x.turnId === undefined || x.turnId === t.id))
       return runs(strip(sweep(mine, [t], lo, hi), Math.min(24, width - 16)))
     }
 
