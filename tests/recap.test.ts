@@ -142,6 +142,9 @@ test('redraws at the same scale keep the edges of finished blocks', async () => 
 
 test('tools map to categories and short labels', async () => {
   expect(catOf('Edit')).toBe('editing')
+  expect(catOf('mcp__Claude_Browser__navigate')).toBe('web')
+  expect(catOf('mcp__remote-devices__Claude_Browser__navigate')).toBe('web')
+  expect(catOf('TaskStop')).toBe('agents')
   expect(catOf('mcp__foo__bar')).toBe('other')
   expect(labelOf({ tool: 'Read', file_path: '/a/b/c/d.ts' })).toBe('Read c/d.ts')
   expect(labelOf({ tool: 'Bash', command: 'npm test', description: 'Run tests' })).toBe('Bash Run tests')
