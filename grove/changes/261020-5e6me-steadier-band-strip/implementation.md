@@ -39,7 +39,7 @@ What changed:
 - `README.md`: the majority-color sentence is replaced. The strip always shows the whole session, fills from the left at a fixed scale starting at one second per cell, and doubles the scale when the bar is full. Each block gets whole cells close to its share, and the panel's turn strips span their full width.
 - `docs/mockups.mjs`: its `strip()` draws the new way. The band images use the zoom ladder and are partly filled at 2 s per cell, and the panel's turn bars are fitted with whole-block cells. Each word is still placed at its own column.
 - Ran `node docs/mockups.mjs`, which regenerated `docs/band.svg`, `docs/band-done.svg` and `docs/panel.svg` (`docs/strip.svg` did not change). Previewed as PNG with `qlmanage`: they look right.
-- Browser check: pending orchestrator.
+- Browser check: done. The four SVGs were rendered in headless Google Chrome and screenshotted; the partly filled band, done band, strip and panel all draw as intended, with no clipped or overlapping text.
 
 ## Reconciliation
 
