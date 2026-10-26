@@ -619,3 +619,23 @@ test('with summaries off, a finished turn lists its actions and makes no model c
   expect(await view.find({ text: /model summary/ })).toBeUndefined()
   await view.unmount()
 })
+
+test('with the band off the clock ticks once a second and the band animation stays still', { options: { showBand: false } }, async ($, on) => {
+  const clock = mock.clock(on, { now: 1_000 })
+  on('turn.start', ($, e) => ({ turnId: e.turnId }))
+  let frameWrites = 0
+  on('state.set', async (_, e, next) => {
+    if (e.key === 'frame') frameWrites++
+    return next(e)
+  })
+  await clock.advance(10_000)
+  await $.turn.start({ text: 'fix the bug', turnId: 't1' })
+  await clock.advance(5_000)
+
+  expect(frameWrites).toBe(0)
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const p = await $.ui.mount({ plugin: 'visual-recap', surface, component: 'Pane', requestId: 'visual-recap', props: pane })
+    expect(await p.find({ text: /Session 5s/ })).toBeDefined()
+    await p.unmount()
+  }
+})
