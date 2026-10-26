@@ -1,0 +1,5 @@
+title: Asking you apart from agent time
+created: 2026-10-26T17:34:23Z
+description: The panel leaves time spent asking you out of the agent's time and shows it beside Waiting on you
+schema: default
+base: 649dec8c009eef25274c1ca0058263218fe71001
