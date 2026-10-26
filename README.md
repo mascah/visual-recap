@@ -24,7 +24,7 @@ While the agent works, the strip's right edge pulses and a spinner turns beside 
 **The panel** (`/visual-recap`) docks beside the conversation in fullscreen mode, or opens above the prompt otherwise. It shows:
 
 - Session length, how much of it the main agent was working, and how long subagents worked.
-- The work mix: the main agent's time per activity as bars, with percentages of its working time. Under them, a **Subagents** row with every subagent's run time added up, with no percentage, since subagents work alongside the main agent and can add up to more than the session. Then the time spent waiting on you.
+- The work mix: the main agent's time per activity as bars, with percentages of its working time. Under them, a **Subagents** row with every subagent's run time added up, with no percentage, since subagents work alongside the main agent and can add up to more than the session. Then the time the main agent spent asking you something (**Asking you**), which isn't counted as its working time, and the time spent waiting on you between turns.
 - A timeline of turns, newest first. Each turn has when it started (from session start), how long it took, a strip of that turn alone, and a one-line description of what happened. A running turn shows your prompt as **Working: …**; a finished one shows **Summarizing…** for a second or two until its description arrives; one you stopped with Esc is marked **interrupted**.
 - Dividers where the conversation was compacted or cleared with `/clear`. The timeline and totals carry on past them.
 
