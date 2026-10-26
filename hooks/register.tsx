@@ -415,7 +415,9 @@ export const register: Register = (on, options) => {
     const width = Math.max(30, e.props.bodyColumns)
     // The work mix: main-loop rows that add up to the main loop's active time, then the subagents' work on top.
     const mix = workMix(s.sp, s.tu, s.st, s.to)
-    const tot = mix.main
+    // Asking you is the agent waiting on you: it stays out of the agent's time and gets its own row by Waiting on you.
+    const { asking = 0, ...rest } = mix.main
+    const tot: typeof mix.main = rest
     const barW = Math.max(6, width - 25)
     const cats = sortedCats(tot)
     const active = Object.values(tot).reduce((n, ms) => n + ms, 0)
@@ -456,6 +458,7 @@ export const register: Register = (on, options) => {
             <Text color={color('agents')}>{CATS.agents.label.padEnd(11 + barW)}</Text> {fmt(mix.subagents).padStart(6)}
           </Text>
         )}
+        {asking >= 1000 && <Text dimColor>{'Asking you'.padEnd(11 + barW)} {fmt(asking).padStart(6)}</Text>}
         {(s.tot.idle ?? 0) >= 1000 && <Text dimColor>{'Waiting on you'.padEnd(11 + barW)} {fmt(s.tot.idle!).padStart(6)}</Text>}
         <Text> </Text>
         <Text weight="bold">Timeline</Text>

@@ -176,7 +176,8 @@ async function expectColors($: Parameters<TestBody>[0], color: (c: Cat) => strin
     const view = await $.ui.mount({ plugin: 'visual-recap', surface, component: 'Pane', requestId: 'visual-recap', props: pane })
     for (const c of ALL) {
       const bars = (await view.findAll({ type: 'Text', text: runOf(c) })).filter(t => t.props.color === color(c) && t.props.mono)
-      expect(bars.length).toBeGreaterThanOrEqual(2) // its totals bar and its piece of the turn's bar
+      // Its totals bar and its piece of the turn's bar; Asking you has no totals bar, only a dimmed row.
+      expect(bars.length).toBeGreaterThanOrEqual(c === 'asking' ? 1 : 2)
     }
     await view.unmount()
   }
@@ -459,6 +460,54 @@ test('the panel draws no Subagents row when no subagent ran', async ($, on) => {
     const p = await $.ui.mount({ plugin: 'visual-recap', surface, component: 'Pane', requestId: 'visual-recap', props: pane })
     expect(await p.find({ text: /^Shell .* 5s 100%$/ })).toBeDefined()
     expect(await p.find({ text: /Subagents/ })).toBeUndefined()
+    await p.unmount()
+  }
+})
+
+// A turn that thinks, asks you a question, then runs Shell, each for the given time, then ends.
+const thinkAskShell = async ($: Engine, on: On, think: number, ask: number, shell: number) => {
+  const clock = mock.clock(on, { now: 1_000 })
+  on('turn.start', ($, e) => ({ turnId: e.turnId }))
+  on('turn.complete', () => ({ text: '' }))
+  on('tool.call', async ($, e) => {
+    await clock.sleep(e.tool === 'AskUserQuestion' ? ask : shell)
+    return { result: 'ok' }
+  })
+  await $.turn.start({ text: 'build it', turnId: 't1' })
+  await clock.advance(think)
+  const question = $.tool.call({ tool: 'AskUserQuestion' } as never)
+  await clock.advance(ask)
+  await question
+  const bash = $.tool.call({ tool: 'Bash', command: 'make' } as never)
+  await clock.advance(shell)
+  await bash
+  await $.turn.complete({ answer: 'built', durationMs: think + ask + shell, isAborted: false, turnId: 't1', reason: 'answer' })
+}
+
+// panel, "Asking you apart from agent time": A question in the middle of a turn.
+test('the panel leaves a question out of the agent time and shows it beside Waiting on you; the band keeps it', async ($, on) => {
+  await thinkAskShell($, on, 30_000, 60_000, 30_000)
+  for (const surface of SURFACES) {
+    const p = await $.ui.mount({ plugin: 'visual-recap', surface, component: 'Pane', requestId: 'visual-recap', props: pane })
+    expect(await p.find({ text: /agent 1m00s · 1 turns/ })).toBeDefined()
+    expect(await p.find({ text: new RegExp(`^Thinking +${CATS.thinking.glyph}+·* +30s  50%$`) })).toBeDefined()
+    expect(await p.find({ text: new RegExp(`^Shell +${CATS.shell.glyph}+·* +30s  50%$`) })).toBeDefined()
+    expect(await p.find({ text: /^Asking you +1m00s$/ })).toBeDefined()
+    await p.unmount()
+    const b = await $.ui.mount({ plugin: 'visual-recap', surface, component: 'AbovePrompt', props: band })
+    expect(await b.find({ text: new RegExp(`^${CATS.thinking.glyph}+${CATS.asking.glyph}+${CATS.shell.glyph}+$`) })).toBeDefined()
+    expect(await b.find({ text: /Asking you 1m00s/ })).toBeDefined()
+    await b.unmount()
+  }
+})
+
+// panel, "Asking you apart from agent time": A question shorter than a second.
+test('the panel shows no Asking you row for a question answered in under a second, nor counts it', async ($, on) => {
+  await thinkAskShell($, on, 2_000, 900, 2_000)
+  for (const surface of SURFACES) {
+    const p = await $.ui.mount({ plugin: 'visual-recap', surface, component: 'Pane', requestId: 'visual-recap', props: pane })
+    expect(await p.find({ text: /agent 4s · 1 turns/ })).toBeDefined()
+    expect(await p.find({ text: /Asking you/ })).toBeUndefined()
     await p.unmount()
   }
 })

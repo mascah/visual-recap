@@ -165,7 +165,9 @@ const s3 = [...s2, ['thinking', 8], ['agents', 48], ['thinking', 6], ['editing',
   }
   // The subagents' own work, each counted in full, adds on top of the main loop's rows: no share of them.
   pane.push([seg(C.agents[0].padEnd(11 + barW), { color: C.agents[1] }), seg(' ' + '3m05s'.padStart(6))])
-  pane.push([dim('Waiting on you'.padEnd(11 + barW) + ' ' + '23m38s'.padStart(6))], [], [bold('Timeline')])
+  // Asking you is the agent waiting on you, so like Waiting on you it is a dimmed row outside the agent's time.
+  pane.push([dim('Asking you'.padEnd(11 + barW) + ' ' + '1m12s'.padStart(6))])
+  pane.push([dim('Waiting on you'.padEnd(11 + barW) + ' ' + '22m26s'.padStart(6))], [], [bold('Timeline')])
   const turns = [
     { at: '41m02s', dur: '1m08s', seq: [['thinking', 20], ['reading', 12], ['editing', 9]], line: dim('Working: add a dark mode toggle to settings') },
     { at: '35m40s', dur: '1m31s', seq: [['thinking', 10], ['agents', 48], ['thinking', 6], ['editing', 14]], line: dim('Summarizing…') },
