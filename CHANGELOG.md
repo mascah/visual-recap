@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.4.0](https://github.com/mascah/visual-recap/compare/v0.3.0...v0.4.0) (2026-10-26)
+
+
+### Features
+
+* set Asking you apart from agent time in the panel ([#26](https://github.com/mascah/visual-recap/issues/26)) ([253fccb](https://github.com/mascah/visual-recap/commit/253fccb87121a84cfcdc140ab6c41725921992a0))
+
+
+### Bug Fixes
+
+* count the built-in browser as Web and agent controls as Subagents ([#7](https://github.com/mascah/visual-recap/issues/7)) ([649dec8](https://github.com/mascah/visual-recap/commit/649dec8c009eef25274c1ca0058263218fe71001))
+* stop the band animation when the band is off ([#6](https://github.com/mascah/visual-recap/issues/6)) ([13d7a70](https://github.com/mascah/visual-recap/commit/13d7a708623b0d41ed8340faabde318aa2801e50))
+
 ## [0.3.0](https://github.com/mascah/visual-recap/compare/v0.2.0...v0.3.0) (2026-10-26)
 
 
