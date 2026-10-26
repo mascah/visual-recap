@@ -22,9 +22,10 @@ export function colorOf(cat: Cat, palette: unknown): string {
 export function catOf(tool: string): Cat {
   if (/^(Read|Grep|Glob|LS|NotebookRead|LSP|ToolSearch)$/.test(tool)) return 'reading'
   if (/^(Edit|Write|MultiEdit|NotebookEdit)$/.test(tool)) return 'editing'
-  if (/^(Bash|BashOutput|KillShell|PowerShell|Monitor)$/.test(tool)) return 'shell'
-  if (/^(WebFetch|WebSearch)$|^mcp__claude-in-chrome/.test(tool)) return 'web'
-  if (/^(Agent|Task|SendMessage)$/.test(tool)) return 'agents'
+  if (/^(Bash|BashOutput|KillShell|TaskStop|PowerShell|Monitor)$/.test(tool)) return 'shell'
+  // The Chrome extension's server may be named claude-in-chrome or Claude_in_Chrome; the desktop app's is Claude_Browser.
+  if (/^(WebFetch|WebSearch)$/.test(tool) || /^mcp__(remote-devices__)?(claude[-_](for|in)[-_]chrome|claude_browser)__/i.test(tool)) return 'web'
+  if (/^(Agent|Task|SendMessage|ListAgents)$/.test(tool)) return 'agents'
   if (/^(AskUserQuestion|ExitPlanMode)$/.test(tool)) return 'asking'
   return 'other'
 }
